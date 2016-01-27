@@ -1,0 +1,61 @@
+
+
+System.properties.putIfAbsent('javax.net.ssl.keyStore', System.properties['user.home]+'/.ssh/keystore.jks')
+System.properties.putIfAbsent('javax.net.ssl.keyStorePassword', 'password')
+System.properties.putIfAbsent('javax.net.ssl.keyStoreType', 'JKS')
+System.properties.putIfAbsent('javax.net.ssl.trustStore', System.properties['user.home]+'/.ssh/truststore.jks')
+System.properties.putIfAbsent('javax.net.ssl.trustStorePassword', 'password')
+System.properties.putIfAbsent('javax.net.ssl.trustStoreType', 'JKS')
+
+ext.sslSystemProperties = System.properties.findAll { it.key.startsWith('javax.net.ssl') }
+ext.isReleaseBuild = !(project.version.endsWith('-SNAPSHOT'))
+
+apply plugin: 'git-release'
+apply plugin: 'war'
+apply plugin: 'groovy'
+apply plugin: 'requirejs-optimizer'
+
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+
+ext.groovyVersion = '2.4.3'
+ext.springVersion = '4.1.6.RELEASE'
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  compile "org.springframework:spring-webmvc:$springVersion"
+  
+}
+
+
+def processedAssets = fileTree("$buildDir/assets") { builtBy 'processAssets' }
+task processAssets(type: Copy) {
+  from 'src/main/webapp'
+  into processedAssets.dir
+}
+
+task optimizeWebAssets(type: RequireJsOptimizer) {
+  dependsOn processedAssets
+  inputs.dir processedAssets.dir
+  
+  configurationFile = "${processedAssets.dir}/js/build.js"
+  outputDir = "$buildDir/optimizedAssets"
+  
+  logLevel = 'WARN'
+}
+
+war {
+  dependsOn optimizeWebAssets
+  
+  exclude 'js', 'css'
+  
+  from("${optimizeWebAssets.outputDir}/js") { into 'js' }
+  from("${optimizeWebAssets.outputDir}/css") { into 'css' }
+  
+  duplicatesStrategy 'FAIL'
+}
